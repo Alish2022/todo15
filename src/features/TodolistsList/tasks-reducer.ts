@@ -2,6 +2,8 @@ import {AddTodolistActionType, RemoveTodolistActionType, SetTodolistsActionType}
 import {TaskPriorities, TaskStatuses, TaskType, todolistsAPI, UpdateTaskModelType} from '../../api/todolists-api'
 import {Dispatch} from 'redux'
 import {AppRootStateType} from '../../app/store'
+import {changeAppErrorAC, changeAppStatusAC} from "./app-reducer";
+import {AxiosError} from "axios";
 
 const initialState: TasksStateType = {}
 
@@ -64,12 +66,27 @@ export const removeTaskTC = (taskId: string, todolistId: string) => (dispatch: D
         })
 }
 export const addTaskTC = (title: string, todolistId: string) => (dispatch: Dispatch<ActionsType>) => {
+    dispatch(changeAppStatusAC("loading"))
     todolistsAPI.createTask(todolistId, title)
         .then(res => {
-            const task = res.data.data.item
-            const action = addTaskAC(task)
-            dispatch(action)
+            if (res.data.resultCode === 0) {
+                const task = res.data.data.item
+                dispatch(addTaskAC(task))
+                dispatch(changeAppStatusAC("success"))
+            } else {
+                if (res.data.messages.length) {
+                    dispatch(changeAppErrorAC(res.data.messages[0]))
+                } else {
+                    dispatch(changeAppErrorAC('Some error'))
+                }
+                dispatch(changeAppStatusAC("failed"))
+            }
         })
+        .catch((error:AxiosError) =>{
+            dispatch(changeAppErrorAC(error.message))
+            dispatch(changeAppStatusAC("failed"))
+        }
+)
 }
 export const updateTaskTC = (taskId: string, domainModel: UpdateDomainTaskModelType, todolistId: string) =>
     (dispatch: Dispatch<ActionsType>, getState: () => AppRootStateType) => {
@@ -93,9 +110,16 @@ export const updateTaskTC = (taskId: string, domainModel: UpdateDomainTaskModelT
 
         todolistsAPI.updateTask(todolistId, taskId, apiModel)
             .then(res => {
-                const action = updateTaskAC(taskId, domainModel, todolistId)
-                dispatch(action)
+                if(res.data.resultCode===0){
+                    const action = updateTaskAC(taskId, domainModel, todolistId)
+                    dispatch(action)
+                }
             })
+            .catch((err:AxiosError)=>{
+                dispatch(changeAppErrorAC(err.message))
+                dispatch(changeAppStatusAC("failed"))
+                }
+            )
     }
 
 // types
@@ -118,3 +142,5 @@ type ActionsType =
     | RemoveTodolistActionType
     | SetTodolistsActionType
     | ReturnType<typeof setTasksAC>
+    | ReturnType<typeof changeAppErrorAC>
+    | ReturnType<typeof changeAppStatusAC>
